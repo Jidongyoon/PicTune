@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import ImageUploader from "@/components/ImageUploader";
-import ProgressView from "@/components/ProgressView";
-import ResultPlayer from "@/components/ResultPlayer";
+import ImageUploader from "@/app/components/ImageUploader";
+import ProgressView from "@/app/components/ProgressView";
+import ResultPlayer from "@/app/components/ResultPlayer";
 
 type Status = "idle" | "uploading" | "done" | "error";
 

@@ -47,9 +47,11 @@ export default function Home() {
   }
 
   return (
-    <main style={{ maxWidth: 480, margin: "48px auto", padding: "0 16px" }}>
-      <h1>PicTune</h1>
-      <p>이미지를 넣으면 분위기에 맞는 8초 BGM을 만들어드려요.</p>
+    <main className="page">
+      <header className="header">
+        <h1>PicTune</h1>
+        <p>이미지를 넣으면 분위기에 맞는 8초 BGM을 만들어드려요.</p>
+      </header>
 
       {status === "idle" && <ImageUploader onSubmit={handleSubmit} />}
       {status === "uploading" && <ProgressView />}
@@ -57,9 +59,13 @@ export default function Home() {
         <ResultPlayer audioUrl={audioUrl} onReset={handleReset} />
       )}
       {status === "error" && (
-        <div>
-          <p style={{ color: "crimson" }}>{errorMessage}</p>
-          <button onClick={handleReset}>다시 시도</button>
+        <div className="card">
+          <div className="alert" role="alert">
+            <p>{errorMessage}</p>
+          </div>
+          <button type="button" className="btn-primary" onClick={handleReset}>
+            다시 시도
+          </button>
         </div>
       )}
     </main>

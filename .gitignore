@@ -1,2 +1,17 @@
 .DS_Store
 
+# Next.js
+node_modules/
+.next/
+.env*.local
+*.tsbuildinfo
+
+# Python workers
+ai/vlm-worker/.venv/
+ai/music-worker/.venv/
+ai/.venv-musicgen/
+**/__pycache__/
+*.pyc
+
+# Model weights (download separately, see SETUP.md)
+ai/models/

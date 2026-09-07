@@ -518,3 +518,7 @@ a.btn-primary {
     transform: none;
   }
 }
+
+.result-prompt {
+  margin-bottom: 16px;
+}

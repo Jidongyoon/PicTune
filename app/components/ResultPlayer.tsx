@@ -1,14 +1,24 @@
 export default function ResultPlayer({
   audioUrl,
+  prompt,
   onReset,
 }: {
   audioUrl: string;
+  prompt: string | null;
   onReset: () => void;
 }) {
   return (
     <div className="card result">
       <p className="result-title">BGM이 완성됐어요</p>
       <audio controls autoPlay src={audioUrl} />
+
+      {prompt && (
+        <div className="prompt-box result-prompt">
+          <span className="prompt-label">생성에 사용된 프롬프트</span>
+          <p className="prompt-text">{prompt}</p>
+        </div>
+      )}
+
       <div className="row">
         <a href={audioUrl} download="pictune-bgm.wav" className="btn-primary">
           다운로드

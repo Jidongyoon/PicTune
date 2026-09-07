@@ -94,7 +94,7 @@ export default function Home() {
         <ProgressView prompt={prompt} seconds={duration} onCancel={handleCancel} />
       )}
       {status === "done" && audioUrl && (
-        <ResultPlayer audioUrl={audioUrl} onReset={handleReset} />
+        <ResultPlayer audioUrl={audioUrl} prompt={prompt} onReset={handleReset} />
       )}
       {status === "error" && (
         <div className="card">

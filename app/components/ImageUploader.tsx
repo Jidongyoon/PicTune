@@ -64,6 +64,13 @@ export default function ImageUploader({
     };
   }, []);
 
+  function clearFile() {
+    setFile(null);
+    setPreviewUrl(null);
+    setWarning(null);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
   function selectFile(selected: File | null) {
     if (!selected) return;
 
@@ -93,6 +100,14 @@ export default function ImageUploader({
 
       {previewUrl && file ? (
         <div className="preview">
+          <button
+            type="button"
+            className="remove-button"
+            onClick={clearFile}
+            aria-label="이미지 제거"
+          >
+            ×
+          </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={previewUrl} alt="선택한 이미지 미리보기" />
           <div className="preview-meta">

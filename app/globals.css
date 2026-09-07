@@ -370,6 +370,30 @@ a.btn-primary {
   gap: 12px;
 }
 
+.prompt-box {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 12px 14px;
+}
+
+.prompt-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.prompt-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .progress-bar-fill {
     transition: none;

@@ -9,6 +9,7 @@ type Status = "idle" | "uploading" | "done" | "error";
 
 export default function Home() {
   const [status, setStatus] = useState<Status>("idle");
+  const [prompt, setPrompt] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -16,6 +17,7 @@ export default function Home() {
   async function handleSubmit(file: File) {
     setStatus("uploading");
     setErrorMessage(null);
+    setPrompt(null);
 
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -24,18 +26,33 @@ export default function Home() {
       const formData = new FormData();
       formData.append("image", file);
 
-      const res = await fetch("/api/generate", {
+      const analyzeRes = await fetch("/api/analyze", {
         method: "POST",
         body: formData,
         signal: controller.signal,
       });
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error ?? `요청이 실패했습니다 (${res.status})`);
+      if (!analyzeRes.ok) {
+        const body = await analyzeRes.json().catch(() => null);
+        throw new Error(body?.error ?? `이미지 분석에 실패했습니다 (${analyzeRes.status})`);
       }
 
-      const blob = await res.blob();
+      const { musicgen_prompt: musicgenPrompt } = await analyzeRes.json();
+      setPrompt(musicgenPrompt);
+
+      const musicRes = await fetch("/api/music", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: musicgenPrompt }),
+        signal: controller.signal,
+      });
+
+      if (!musicRes.ok) {
+        const body = await musicRes.json().catch(() => null);
+        throw new Error(body?.error ?? `BGM 생성에 실패했습니다 (${musicRes.status})`);
+      }
+
+      const blob = await musicRes.blob();
       setAudioUrl(URL.createObjectURL(blob));
       setStatus("done");
     } catch (err) {
@@ -57,6 +74,7 @@ export default function Home() {
     setAudioUrl(null);
     setStatus("idle");
     setErrorMessage(null);
+    setPrompt(null);
   }
 
   return (
@@ -67,7 +85,9 @@ export default function Home() {
       </header>
 
       {status === "idle" && <ImageUploader onSubmit={handleSubmit} />}
-      {status === "uploading" && <ProgressView onCancel={handleCancel} />}
+      {status === "uploading" && (
+        <ProgressView prompt={prompt} onCancel={handleCancel} />
+      )}
       {status === "done" && audioUrl && (
         <ResultPlayer audioUrl={audioUrl} onReset={handleReset} />
       )}

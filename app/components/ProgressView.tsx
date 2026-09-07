@@ -14,7 +14,13 @@ function formatClock(totalSeconds: number) {
   return `${m}:${s}`;
 }
 
-export default function ProgressView({ onCancel }: { onCancel: () => void }) {
+export default function ProgressView({
+  prompt,
+  onCancel,
+}: {
+  prompt: string | null;
+  onCancel: () => void;
+}) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -53,6 +59,13 @@ export default function ProgressView({ onCancel }: { onCancel: () => void }) {
           </span>
         </div>
       </div>
+
+      {prompt && (
+        <div className="prompt-box">
+          <span className="prompt-label">생성 프롬프트</span>
+          <p className="prompt-text">{prompt}</p>
+        </div>
+      )}
 
       <p className="progress-note">
         모델이 CPU에서 동작해 1~2분 정도 걸려요. 표시된 시간은 예상치예요.

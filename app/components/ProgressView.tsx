@@ -76,7 +76,8 @@ export default function ProgressView({
       )}
 
       <p className="progress-note">
-        모델이 CPU에서 동작해 1~2분 정도 걸려요. 표시된 시간은 예상치예요.
+        모델이 CPU에서 동작해 약 {formatClock(estimatedSeconds)} 정도 걸려요. 표시된
+        시간은 예상치예요.
         <br />
         페이지를 닫지 말고 기다려주세요.
       </p>

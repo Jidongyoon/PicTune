@@ -10,14 +10,16 @@ type Status = "idle" | "uploading" | "done" | "error";
 export default function Home() {
   const [status, setStatus] = useState<Status>("idle");
   const [prompt, setPrompt] = useState<string | null>(null);
+  const [duration, setDuration] = useState(8);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
-  async function handleSubmit(file: File) {
+  async function handleSubmit(file: File, seconds: number) {
     setStatus("uploading");
     setErrorMessage(null);
     setPrompt(null);
+    setDuration(seconds);
 
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -43,7 +45,7 @@ export default function Home() {
       const musicRes = await fetch("/api/music", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: musicgenPrompt }),
+        body: JSON.stringify({ prompt: musicgenPrompt, seconds }),
         signal: controller.signal,
       });
 
@@ -81,12 +83,12 @@ export default function Home() {
     <main className="page">
       <header className="header">
         <h1>PicTune</h1>
-        <p>이미지를 넣으면 분위기에 맞는 8초 BGM을 만들어드려요.</p>
+        <p>이미지를 넣으면 분위기에 맞는 BGM을 만들어드려요.</p>
       </header>
 
       {status === "idle" && <ImageUploader onSubmit={handleSubmit} />}
       {status === "uploading" && (
-        <ProgressView prompt={prompt} onCancel={handleCancel} />
+        <ProgressView prompt={prompt} seconds={duration} onCancel={handleCancel} />
       )}
       {status === "done" && audioUrl && (
         <ResultPlayer audioUrl={audioUrl} onReset={handleReset} />

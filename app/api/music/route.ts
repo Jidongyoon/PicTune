@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const MUSIC_WORKER_URL = process.env.MUSIC_WORKER_URL ?? "http://localhost:8002";
-const BGM_SECONDS = 8;
+const DEFAULT_BGM_SECONDS = 8;
+const MIN_BGM_SECONDS = 1;
+const MAX_BGM_SECONDS = 30;
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -11,10 +13,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "prompt가 필요합니다." }, { status: 400 });
   }
 
+  const requestedSeconds = Number(body?.seconds);
+  const seconds = Number.isFinite(requestedSeconds)
+    ? Math.min(MAX_BGM_SECONDS, Math.max(MIN_BGM_SECONDS, requestedSeconds))
+    : DEFAULT_BGM_SECONDS;
+
   const musicRes = await fetch(`${MUSIC_WORKER_URL}/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, seconds: BGM_SECONDS }),
+    body: JSON.stringify({ prompt, seconds }),
   });
 
   if (!musicRes.ok) {

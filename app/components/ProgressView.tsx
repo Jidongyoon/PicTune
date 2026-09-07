@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 
-// 실제 진행률을 알려주는 API가 없어, 로컬 CPU 실측치(약 60초)를 기준으로
-// 경과 시간에서 예상 진행률을 그린다. 추정이 빗나가도 막대가 먼저 100%에
-// 도달하지 않도록 CEILING에서 멈춘다.
-const ESTIMATED_SECONDS = 75;
+// 실제 진행률을 알려주는 API가 없어, 로컬 CPU 실측치를 기준으로 경과 시간에서
+// 예상 진행률을 그린다. 이미지 분석(VLM) 단계는 BGM 길이와 무관하게 걸리고,
+// 음악 생성 단계는 요청한 길이(seconds)에 비례해 걸리므로 8초 BGM 기준
+// 실측치(분석 약 20초 + 생성 약 55초 = 75초)를 요청 길이에 맞게 배분한다.
+// 추정이 빗나가도 막대가 먼저 100%에 도달하지 않도록 CEILING에서 멈춘다.
+const VLM_ESTIMATE_SECONDS = 20;
+const MUSIC_ESTIMATE_SECONDS_PER_SECOND = 55 / 8;
 const CEILING = 0.95;
 
 function formatClock(totalSeconds: number) {
@@ -16,9 +19,11 @@ function formatClock(totalSeconds: number) {
 
 export default function ProgressView({
   prompt,
+  seconds,
   onCancel,
 }: {
   prompt: string | null;
+  seconds: number;
   onCancel: () => void;
 }) {
   const [elapsed, setElapsed] = useState(0);
@@ -28,10 +33,13 @@ export default function ProgressView({
     return () => clearInterval(id);
   }, []);
 
-  const ratio = Math.min(elapsed / ESTIMATED_SECONDS, CEILING);
+  const estimatedSeconds = Math.round(
+    VLM_ESTIMATE_SECONDS + MUSIC_ESTIMATE_SECONDS_PER_SECOND * seconds,
+  );
+  const ratio = Math.min(elapsed / estimatedSeconds, CEILING);
   const percent = Math.round(ratio * 100);
-  const overdue = elapsed >= ESTIMATED_SECONDS;
-  const remaining = ESTIMATED_SECONDS - elapsed;
+  const overdue = elapsed >= estimatedSeconds;
+  const remaining = estimatedSeconds - elapsed;
 
   return (
     <div className="card progress" role="status" aria-live="polite">

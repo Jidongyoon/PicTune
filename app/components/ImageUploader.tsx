@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const MAX_SIZE_MB = 10;
+const DURATION_TICKS = [1, 5, 10, 15, 20, 25, 30];
 
 function formatSize(bytes: number) {
   const mb = bytes / (1024 * 1024);
@@ -12,12 +13,13 @@ function formatSize(bytes: number) {
 export default function ImageUploader({
   onSubmit,
 }: {
-  onSubmit: (file: File) => void;
+  onSubmit: (file: File, seconds: number) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
+  const [seconds, setSeconds] = useState(8);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 미리보기 objectURL은 교체·언마운트 시점에 반드시 해제한다.
@@ -141,11 +143,42 @@ export default function ImageUploader({
         </div>
       )}
 
+      <div className="duration-control">
+        <div className="duration-label-row">
+          <span className="duration-label">BGM 길이</span>
+          <span className="duration-value">{seconds}초</span>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={30}
+          step={1}
+          value={seconds}
+          onChange={(e) => setSeconds(Number(e.target.value))}
+          className="duration-slider"
+          aria-label="BGM 길이(초)"
+          list="duration-ticks"
+        />
+        <datalist id="duration-ticks">
+          {DURATION_TICKS.map((tick) => (
+            <option key={tick} value={tick}></option>
+          ))}
+        </datalist>
+        <div className="duration-tick-labels" aria-hidden="true">
+          {DURATION_TICKS.map((tick) => (
+            <span key={tick}>{tick}</span>
+          ))}
+        </div>
+        <span className="duration-hint">
+          길이가 길수록 생성 시간이 늘어나요.
+        </span>
+      </div>
+
       <button
         type="button"
         className="btn-primary"
         disabled={!file}
-        onClick={() => file && onSubmit(file)}
+        onClick={() => file && onSubmit(file, seconds)}
       >
         BGM 생성
       </button>

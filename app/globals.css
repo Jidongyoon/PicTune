@@ -374,22 +374,25 @@ a.btn-primary {
   width: 100%;
   text-align: left;
   border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   border-radius: var(--radius);
-  background: var(--bg);
+  background: var(--accent-soft);
   padding: 12px 14px;
 }
 
 .prompt-label {
   display: block;
   font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
   margin-bottom: 4px;
 }
 
 .prompt-text {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--text);
   line-height: 1.5;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import ImageUploader from "@/app/components/ImageUploader";
 import ProgressView from "@/app/components/ProgressView";
 import ResultPlayer from "@/app/components/ResultPlayer";
@@ -11,10 +11,14 @@ export default function Home() {
   const [status, setStatus] = useState<Status>("idle");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
   async function handleSubmit(file: File) {
     setStatus("uploading");
     setErrorMessage(null);
+
+    const controller = new AbortController();
+    controllerRef.current = controller;
 
     try {
       const formData = new FormData();
@@ -23,6 +27,7 @@ export default function Home() {
       const res = await fetch("/api/generate", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -34,9 +39,17 @@ export default function Home() {
       setAudioUrl(URL.createObjectURL(blob));
       setStatus("done");
     } catch (err) {
+      if (controller.signal.aborted) return; // 사용자가 취소한 경우 에러로 취급하지 않는다.
       setErrorMessage(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
       setStatus("error");
+    } finally {
+      controllerRef.current = null;
     }
+  }
+
+  function handleCancel() {
+    controllerRef.current?.abort();
+    setStatus("idle");
   }
 
   function handleReset() {
@@ -54,7 +67,7 @@ export default function Home() {
       </header>
 
       {status === "idle" && <ImageUploader onSubmit={handleSubmit} />}
-      {status === "uploading" && <ProgressView />}
+      {status === "uploading" && <ProgressView onCancel={handleCancel} />}
       {status === "done" && audioUrl && (
         <ResultPlayer audioUrl={audioUrl} onReset={handleReset} />
       )}

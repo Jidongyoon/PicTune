@@ -14,7 +14,7 @@ function formatClock(totalSeconds: number) {
   return `${m}:${s}`;
 }
 
-export default function ProgressView() {
+export default function ProgressView({ onCancel }: { onCancel: () => void }) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -59,6 +59,10 @@ export default function ProgressView() {
         <br />
         페이지를 닫지 말고 기다려주세요.
       </p>
+
+      <button type="button" className="btn-secondary" onClick={onCancel}>
+        취소
+      </button>
     </div>
   );
 }

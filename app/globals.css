@@ -12,8 +12,10 @@
   --radius: 12px;
 }
 
+/* 시스템이 다크 모드인데 사용자가 라이트를 직접 선택했으면(data-theme="light")
+   시스템 설정보다 그 선택을 우선한다. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #17161a;
     --surface: #201f24;
     --border: #35333b;
@@ -25,6 +27,21 @@
     --danger: #e88a84;
     --danger-soft: #2e2020;
   }
+}
+
+/* 시스템이 라이트 모드여도 사용자가 다크를 직접 선택했으면(data-theme="dark")
+   그 선택을 강제로 적용한다. */
+:root[data-theme="dark"] {
+  --bg: #17161a;
+  --surface: #201f24;
+  --border: #35333b;
+  --text: #efedea;
+  --muted: #a09b95;
+  --accent: #e08a4e;
+  --accent-hover: #eb9b62;
+  --accent-soft: #2b241f;
+  --danger: #e88a84;
+  --danger-soft: #2e2020;
 }
 
 * {
@@ -447,5 +464,36 @@ a.btn-primary {
   }
   .progress-bar-fill.is-overdue {
     animation: none;
+  }
+}
+
+/* 다크 모드 토글 */
+
+.theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  transition: border-color 0.15s ease, transform 0.15s ease, color 0.15s ease;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent);
+  transform: rotate(12deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle:hover {
+    transform: none;
   }
 }

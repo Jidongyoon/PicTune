@@ -26,6 +26,44 @@ export default function ImageUploader({
     return () => URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
+  // 브라우저 창 전체를 드롭 영역으로 취급한다. 이미지가 이미 선택된 상태여도
+  // 새로 끌어다 놓으면 기존 이미지를 교체한다.
+  // dragenter/dragleave가 자식 요소를 넘나들 때도 튀지 않도록 진입 횟수를 센다.
+  useEffect(() => {
+    let depth = 0;
+
+    function onDragEnter(e: DragEvent) {
+      e.preventDefault();
+      depth++;
+      setIsDragging(true);
+    }
+    function onDragOver(e: DragEvent) {
+      e.preventDefault();
+    }
+    function onDragLeave(e: DragEvent) {
+      e.preventDefault();
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setIsDragging(false);
+    }
+    function onDrop(e: DragEvent) {
+      e.preventDefault();
+      depth = 0;
+      setIsDragging(false);
+      selectFile(e.dataTransfer?.files?.[0] ?? null);
+    }
+
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, []);
+
   function selectFile(selected: File | null) {
     if (!selected) return;
 
@@ -41,19 +79,6 @@ export default function ImageUploader({
     setWarning(null);
     setFile(selected);
     setPreviewUrl(URL.createObjectURL(selected));
-  }
-
-  function clearFile() {
-    setFile(null);
-    setPreviewUrl(null);
-    setWarning(null);
-    if (inputRef.current) inputRef.current.value = "";
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setIsDragging(false);
-    selectFile(e.dataTransfer.files?.[0] ?? null);
   }
 
   return (
@@ -74,7 +99,11 @@ export default function ImageUploader({
             <span className="preview-name">
               {file.name} · {formatSize(file.size)}
             </span>
-            <button type="button" className="link-button" onClick={clearFile}>
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => inputRef.current?.click()}
+            >
               변경
             </button>
           </div>
@@ -84,12 +113,6 @@ export default function ImageUploader({
           type="button"
           className={`dropzone${isDragging ? " is-dragging" : ""}`}
           onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
         >
           <span className="dropzone-title">이미지를 끌어다 놓으세요</span>
           <span className="dropzone-hint">또는 클릭해서 파일 선택</span>

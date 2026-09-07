@@ -82,7 +82,10 @@ export default function Home() {
   return (
     <main className="page">
       <header className="header">
-        <h1>PicTune</h1>
+        <span className="logo-badge">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="PicTune" className="logo" />
+        </span>
         <p>이미지를 넣으면 분위기에 맞는 BGM을 만들어드려요.</p>
       </header>
 

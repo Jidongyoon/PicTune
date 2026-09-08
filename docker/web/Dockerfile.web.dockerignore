@@ -1,0 +1,25 @@
+# docker/web/Dockerfile.web (레포 루트를 빌드 컨텍스트로 사용) 전용 ignore 파일.
+# 파일명이 "<Dockerfile 경로>.dockerignore" 규칙을 따라야 BuildKit이 자동으로 인식한다.
+# ai/ 하위(VLM·Music 워커, 모델 파일)는 웹앱 이미지에 필요 없어 통째로 제외한다.
+ai/
+
+# Node
+node_modules/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+
+# Git / editor / OS
+.git/
+.gitignore
+.DS_Store
+
+# 로컬 전용 설정, 이미지에는 런타임에 -e로 주입한다.
+.env.local
+.env*.local
+
+# 문서(빌드에 불필요)
+*.md
+docs/
+infra/

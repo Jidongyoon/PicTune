@@ -1,0 +1,7 @@
+**
+!ai/
+!ai/job_runner.py
+!ai/vlm-worker/
+!ai/vlm-worker/main.py
+!ai/vlm-worker/caption.py
+!ai/vlm-worker/requirements.txt

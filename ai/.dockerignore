@@ -1,0 +1,10 @@
+# 빌드 컨텍스트가 ai/ 이므로 이 파일은 반드시 여기 있어야 적용된다.
+# 없으면 로컬 .venv(각 1.6GB)와 models/가 그대로 이미지에 복사된다.
+models/
+**/.venv/
+.venv-musicgen/
+**/__pycache__/
+*.pyc
+tests/
+*.md
+**/Dockerfile

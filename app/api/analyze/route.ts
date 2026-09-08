@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 const VLM_WORKER_URL = process.env.VLM_WORKER_URL ?? "http://localhost:8001";
 
 export async function POST(req: NextRequest) {
+  const jobId = req.headers.get("x-job-id");
+  if (!jobId || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId)) {
+    return NextResponse.json({ error: "유효한 작업 ID가 필요합니다." }, { status: 400 });
+  }
   const formData = await req.formData();
   const image = formData.get("image");
 
@@ -16,7 +20,12 @@ export async function POST(req: NextRequest) {
   const vlmRes = await fetch(`${VLM_WORKER_URL}/caption`, {
     method: "POST",
     body: vlmFormData,
+    headers: { "x-job-id": jobId },
   });
+
+  if (vlmRes.status === 409) {
+    return NextResponse.json({ error: "취소되었거나 이미 처리 중인 작업입니다." }, { status: 409 });
+  }
 
   if (!vlmRes.ok) {
     return NextResponse.json(

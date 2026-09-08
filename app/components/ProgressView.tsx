@@ -21,10 +21,14 @@ export default function ProgressView({
   prompt,
   seconds,
   onCancel,
+  cancelling,
+  cancelError,
 }: {
   prompt: string | null;
   seconds: number;
   onCancel: () => void;
+  cancelling: boolean;
+  cancelError: string | null;
 }) {
   const [elapsed, setElapsed] = useState(0);
 
@@ -82,8 +86,9 @@ export default function ProgressView({
         페이지를 닫지 말고 기다려주세요.
       </p>
 
-      <button type="button" className="btn-secondary" onClick={onCancel}>
-        취소
+      {cancelError && <p role="alert">{cancelError}</p>}
+      <button type="button" className="btn-secondary" onClick={onCancel} disabled={cancelling}>
+        {cancelling ? "작업 중단 중…" : "취소"}
       </button>
     </div>
   );

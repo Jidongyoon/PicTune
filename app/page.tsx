@@ -15,7 +15,16 @@ export default function Home() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
+  const jobRef = useRef<string | null>(null);
+  const cancellingRef = useRef(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
   async function handleSubmit(file: File, seconds: number) {
+    if (jobRef.current) return;
+    const jobId = crypto.randomUUID();
+    jobRef.current = jobId;
+    setCancelError(null);
     setStatus("uploading");
     setErrorMessage(null);
     setPrompt(null);
@@ -31,6 +40,7 @@ export default function Home() {
       const analyzeRes = await fetch("/api/analyze", {
         method: "POST",
         body: formData,
+        headers: { "x-job-id": jobId },
         signal: controller.signal,
       });
 
@@ -40,11 +50,12 @@ export default function Home() {
       }
 
       const { musicgen_prompt: musicgenPrompt } = await analyzeRes.json();
+      controller.signal.throwIfAborted();
       setPrompt(musicgenPrompt);
 
       const musicRes = await fetch("/api/music", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-job-id": jobId },
         body: JSON.stringify({ prompt: musicgenPrompt, seconds }),
         signal: controller.signal,
       });
@@ -55,6 +66,7 @@ export default function Home() {
       }
 
       const blob = await musicRes.blob();
+      controller.signal.throwIfAborted();
       setAudioUrl(URL.createObjectURL(blob));
       setStatus("done");
     } catch (err) {
@@ -62,13 +74,42 @@ export default function Home() {
       setErrorMessage(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
       setStatus("error");
     } finally {
-      controllerRef.current = null;
+      if (controllerRef.current === controller && !controller.signal.aborted) {
+        controllerRef.current = null;
+        jobRef.current = null;
+      }
     }
   }
 
-  function handleCancel() {
+  async function handleCancel() {
+    const jobId = jobRef.current;
+    if (!jobId || cancellingRef.current) return;
+    cancellingRef.current = true;
+    setCancelling(true);
+    setCancelError(null);
     controllerRef.current?.abort();
-    setStatus("idle");
+    try {
+      while (true) {
+        const response = await fetch("/api/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId }),
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!response.ok) throw new Error("cancel failed");
+        if (response.status !== 202) break;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      jobRef.current = null;
+      controllerRef.current = null;
+      setPrompt(null);
+      setStatus("idle");
+    } catch {
+      setCancelError("서버의 작업 중단을 확인하지 못했어요. 취소를 다시 눌러주세요.");
+    } finally {
+      cancellingRef.current = false;
+      setCancelling(false);
+    }
   }
 
   function handleReset() {
@@ -91,7 +132,7 @@ export default function Home() {
 
       {status === "idle" && <ImageUploader onSubmit={handleSubmit} />}
       {status === "uploading" && (
-        <ProgressView prompt={prompt} seconds={duration} onCancel={handleCancel} />
+        <ProgressView prompt={prompt} seconds={duration} onCancel={handleCancel} cancelling={cancelling} cancelError={cancelError} />
       )}
       {status === "done" && audioUrl && (
         <ResultPlayer audioUrl={audioUrl} prompt={prompt} onReset={handleReset} />

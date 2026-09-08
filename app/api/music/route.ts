@@ -6,6 +6,10 @@ const MIN_BGM_SECONDS = 1;
 const MAX_BGM_SECONDS = 30;
 
 export async function POST(req: NextRequest) {
+  const jobId = req.headers.get("x-job-id");
+  if (!jobId || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId)) {
+    return NextResponse.json({ error: "유효한 작업 ID가 필요합니다." }, { status: 400 });
+  }
   const body = await req.json().catch(() => null);
   const prompt = body?.prompt;
 
@@ -20,9 +24,13 @@ export async function POST(req: NextRequest) {
 
   const musicRes = await fetch(`${MUSIC_WORKER_URL}/generate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-job-id": jobId },
     body: JSON.stringify({ prompt, seconds }),
   });
+
+  if (musicRes.status === 409) {
+    return NextResponse.json({ error: "취소되었거나 이미 처리 중인 작업입니다." }, { status: 409 });
+  }
 
   if (!musicRes.ok) {
     return NextResponse.json(

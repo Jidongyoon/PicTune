@@ -12,6 +12,8 @@ export default function Home() {
   const [prompt, setPrompt] = useState<string | null>(null);
   const [duration, setDuration] = useState(8);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  // 업로더가 언마운트되면 그쪽 objectURL은 해제되므로, 결과 화면용 미리보기는 여기서 따로 만든다.
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
@@ -29,6 +31,10 @@ export default function Home() {
     setErrorMessage(null);
     setPrompt(null);
     setDuration(seconds);
+    setImageUrl((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return URL.createObjectURL(file);
+    });
 
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -103,6 +109,7 @@ export default function Home() {
       jobRef.current = null;
       controllerRef.current = null;
       setPrompt(null);
+      clearImage();
       setStatus("idle");
     } catch {
       setCancelError("서버의 작업 중단을 확인하지 못했어요. 취소를 다시 눌러주세요.");
@@ -112,9 +119,17 @@ export default function Home() {
     }
   }
 
+  function clearImage() {
+    setImageUrl((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return null;
+    });
+  }
+
   function handleReset() {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setAudioUrl(null);
+    clearImage();
     setStatus("idle");
     setErrorMessage(null);
     setPrompt(null);
@@ -135,7 +150,7 @@ export default function Home() {
         <ProgressView prompt={prompt} seconds={duration} onCancel={handleCancel} cancelling={cancelling} cancelError={cancelError} />
       )}
       {status === "done" && audioUrl && (
-        <ResultPlayer audioUrl={audioUrl} prompt={prompt} onReset={handleReset} />
+        <ResultPlayer audioUrl={audioUrl} imageUrl={imageUrl} prompt={prompt} onReset={handleReset} />
       )}
       {status === "error" && (
         <div className="card">

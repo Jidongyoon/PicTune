@@ -1,15 +1,25 @@
 export default function ResultPlayer({
   audioUrl,
+  imageUrl,
   prompt,
   onReset,
 }: {
   audioUrl: string;
+  imageUrl: string | null;
   prompt: string | null;
   onReset: () => void;
 }) {
   return (
     <div className="card result">
       <p className="result-title">BGM이 완성됐어요</p>
+
+      {imageUrl && (
+        <div className="preview result-image">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imageUrl} alt="BGM을 만든 이미지" />
+        </div>
+      )}
+
       <audio controls autoPlay src={audioUrl} />
 
       {prompt && (

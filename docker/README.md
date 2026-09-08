@@ -77,6 +77,14 @@ sudo install -d -o 10001 /cache/vlm
 검사는 의도적으로 파일명 존재 여부만 사용하므로, 같은 이름의 손상된 파일이나
 다른 내용의 파일까지 판별하지는 않습니다.
 
+## Kubernetes 환경 변수 관리
+
+Dockerfile의 `ENV`는 로컬 실행용 기본값으로만 두고, 모델 저장소·revision·
+경로·서비스 주소처럼 배포 환경에 따라 달라지는 값은 운영 적용 전에 별도
+ConfigMap 파일(예: `pictune-vlm-configmap.yaml`)로 옮겨 관리합니다. ConfigMap은
+아래처럼 Deployment에서 `envFrom`으로 등록하며, 같은 키가 있으면 이미지의
+기본값을 덮어씁니다. 토큰이나 비밀번호는 ConfigMap이 아니라 Secret을 사용합니다.
+
 ## Kubernetes 배포 예시
 
 AWS 계정 ID와 리전을 실제 ECR 주소로 바꿔 사용합니다. VLM API와
@@ -84,6 +92,18 @@ llama-server는 취소 스트림이 프록시를 거치지 않도록 같은 Pod�
 통신하며, Service는 VLM API의 8001 포트만 공개합니다.
 
 ```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pictune-vlm-config
+data:
+  HF_HOME: /cache/vlm/.huggingface
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  VLM_REPO_ID: ggml-org/SmolVLM2-2.2B-Instruct-GGUF
+  VLM_REVISION: 1bc3c9f74ceafd4c8d4411cc9cf188bba3798f91
+  VLM_MODEL_DIR: /cache/vlm
+  LLAMA_SERVER_URL: http://127.0.0.1:8003
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -105,6 +125,9 @@ spec:
         - name: model-init
           image: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-model-init:smolvlm2-1bc3c9f
           imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: pictune-vlm-config
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
@@ -163,9 +186,9 @@ spec:
         - name: vlm-api
           image: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-api:v1
           imagePullPolicy: IfNotPresent
-          env:
-            - name: LLAMA_SERVER_URL
-              value: http://127.0.0.1:8003
+          envFrom:
+            - configMapRef:
+                name: pictune-vlm-config
           ports:
             - name: vlm-http
               containerPort: 8001

@@ -1,0 +1,213 @@
+# PicTune VLM Deployment (initContainer 1 + 컨테이너 2)
+#
+# 담당: B  /  가이드: docs/manifest_guide.md 0절·4절 "B. vlm"
+#
+# 구조
+#   initContainer: model-init      GGUF 2개를 /cache/vlm 에 내려받는다. 끝나야 다음 단계
+#           ↓
+#   ├── llama-server  8003         /cache/vlm 읽기전용. Service 없음(Pod 내부 전용)
+#   └── vlm-api       8001         볼륨 없음. 127.0.0.1:8003 으로 llama-server 호출
+#
+# 두 컨테이너를 한 Pod에 두는 이유 (분리 금지)
+#   - 취소 기능이 localhost 통신을 전제로 설계됐다. docs/incidents/RESIDENT_INFERENCE.md 참고
+#   - caption.py 는 llama-server 의 슬롯 1개를 vlm-api 가 단독 소유한다고 가정한다
+#   - llama-server 없이 vlm-api 는 health 조차 통과하지 못한다 (수명주기가 같다)
+#
+# 사전 준비 (노드) — 세 컨테이너 모두 UID 10001 로 실행되므로 캐시 디렉터리
+# 소유자를 맞춰야 한다. music 담당이 확인한 바로는 노드의 실제 경로가 가이드와
+# 다를 수 있으므로(/cache/music → /cache/musicgen), 적용 전 `ls -ld /cache/*` 로
+# 확인할 것.
+#   sudo install -d -o 10001 /cache/vlm
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pictune-vlm
+  namespace: pictune
+  labels:
+    app: pictune-vlm
+spec:
+  # 단일 슬롯 설계라 늘려도 의미가 없고, 늘리면 취소 로직의 슬롯 소유 가정이 깨진다.
+  # HPA 도 붙이지 않는다.
+  replicas: 1
+  # 모델이 프로세스 메모리에 상주하는 구조라 RollingUpdate 로 신구 Pod 가 겹치면
+  # 메모리 요구량이 순간적으로 2배가 된다. music 과 동일한 이유로 Recreate 를 쓴다.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pictune-vlm
+  template:
+    metadata:
+      labels:
+        app: pictune-vlm
+    spec:
+      # 취소 로직이 실제 연산 종료까지 기다린 뒤 반환하므로(ai/job_runner.py)
+      # 종료 유예를 넉넉히 둔다.
+      terminationGracePeriodSeconds: 180
+      # UID/GID 를 Pod 레벨에서 고정한다. 이미지의 USER 지시어에 의존하지 않고
+      # hostPath 볼륨 소유자(10001)와 확실히 맞추기 위함이다.
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+
+      initContainers:
+        # GGUF 파일이 이미 있으면 다운로드를 건너뛴다(파일명 존재 여부로만 판단).
+        # 실패하면 아래 두 컨테이너는 시작조차 하지 않는다.
+        - name: model-init
+          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-model-init:smolvlm2-1bc3c9f
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          envFrom:
+            - configMapRef:
+                name: pictune-vlm-config
+          env:
+            # huggingface_hub 가 자동으로 읽는다(코드 수정 불필요).
+            # Secret(pictune-hf-token)을 이 Deployment 보다 먼저 적용해야 한다.
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: pictune-hf-token
+                  key: HF_TOKEN
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: vlm-cache
+              mountPath: /cache/vlm
+              readOnly: false      # 여기에 모델을 내려받아야 한다
+
+      containers:
+        - name: llama-server
+          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-llama-server:server
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          # K8s 의 args 는 이미지의 CMD 를 부분 수정할 수 없고 통째로 대체한다.
+          # 따라서 -ngl 과 --threads 를 추가하려면 기존 인자를 전부 다시 적어야 한다.
+          args:
+            - "-m"
+            - "/cache/vlm/SmolVLM2-2.2B-Instruct-Q4_K_M.gguf"
+            - "--mmproj"
+            - "/cache/vlm/mmproj-SmolVLM2-2.2B-Instruct-Q8_0.gguf"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8003"
+            # --parallel 1 과 --slots 는 제거 금지.
+            # caption.py 가 슬롯이 정확히 1개인지 검증하고(slots 함수),
+            # 취소 완료를 /slots 의 is_processing 으로 확인한다.
+            - "--parallel"
+            - "1"
+            - "--slots"
+            - "-c"
+            - "4096"
+            # GPU 사용 불가 환경이므로 0 을 명시한다.
+            # 지정하지 않으면 기본값이 GPU 오프로드를 가정해 환경마다 다르게 동작한다.
+            - "-ngl"
+            - "0"
+            # 미지정 시 노드 전체 코어를 점유해 music-worker 와 충돌한다.
+            # requests.cpu 와 맞춘 값이다.
+            - "--threads"
+            - "2"
+          ports:
+            - name: llama-http
+              containerPort: 8003
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 3Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+          # 모델(1.6GB) + mmproj(0.7GB) 로딩에 시간이 걸린다.
+          # 10초 x 40회 = 최대 약 6분 40초. startupProbe 가 성공할 때까지
+          # readiness/liveness 는 평가되지 않는다.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: llama-http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 40
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: llama-http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # liveness 는 web/music/vlm-api 와 동일하게 tcpSocket 으로 통일한다.
+          # 추론 중 CPU 포화로 /health 응답이 느려져도 진행 중 작업이 재시작으로
+          # 잘리지 않게 하기 위함이다.
+          livenessProbe:
+            tcpSocket:
+              port: llama-http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          volumeMounts:
+            - name: vlm-cache
+              mountPath: /cache/vlm
+              readOnly: true       # model-init 이 받아둔 것을 읽기만 한다
+
+        - name: vlm-api
+          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-api:v1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          # LLAMA_SERVER_URL 을 127.0.0.1:8003 으로 덮어쓰기 위해 반드시 필요하다.
+          # 이미지 기본값(http://llama-server:8003)은 우리 구조에 없는 Service 이름이다.
+          envFrom:
+            - configMapRef:
+                name: pictune-vlm-config
+          ports:
+            - name: vlm-http
+              containerPort: 8001
+              protocol: TCP
+          # 볼륨 마운트 없음 — 모델 파일을 직접 읽지 않고 HTTP 로만 llama-server 를 호출한다.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          # /health 가 내부적으로 llama-server 의 /slots 를 호출한다(caption.py:53).
+          # llama-server 가 로딩 중이면 503 이 나고, 그동안 이 Pod 는 Service
+          # 엔드포인트에서 빠진다. 의도한 동작이다.
+          # 내부 httpx 타임아웃이 5초라 timeoutSeconds 는 그보다 커야 한다.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: vlm-http
+            periodSeconds: 10
+            timeoutSeconds: 6
+            failureThreshold: 3
+          # liveness 는 반드시 tcpSocket 으로 둔다.
+          # httpGet /health 로 하면 llama-server 로딩 중(최대 6분 40초) 멀쩡한
+          # vlm-api 가 "죽었다"고 판정되어 재시작 루프에 빠진다.
+          livenessProbe:
+            tcpSocket:
+              port: vlm-http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+      volumes:
+        # 단일 노드 구성이므로 hostPath 로 충분하다.
+        # type: Directory 로 두어 사전 준비가 안 됐을 때 명확히 실패시킨다.
+        # DirectoryOrCreate 금지 — kubelet 이 root 소유로 만들면 UID 10001 이 못 쓴다.
+        - name: vlm-cache
+          hostPath:
+            path: /cache/vlm
+            type: Directory

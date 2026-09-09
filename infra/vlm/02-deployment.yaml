@@ -50,6 +50,18 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
 
+      # ECR 프라이빗 레지스트리 인증. EKS 와 달리 k3s 는 노드 IAM 역할로
+      # ECR 을 자동 인증하지 못하므로 pull secret 이 필요하다.
+      # initContainers 를 포함한 이 Pod 의 모든 컨테이너에 적용된다.
+      # 사전에 Secret 을 만들어 두어야 한다(12시간마다 토큰 만료되므로 갱신 필요):
+      #   aws ecr get-login-password --region ap-northeast-2 | \
+      #     kubectl create secret docker-registry ecr-secret \
+      #       --docker-server=508266022472.dkr.ecr.ap-northeast-2.amazonaws.com \
+      #       --docker-username=AWS --docker-password-stdin \
+      #       -n pictune --dry-run=client -o yaml | kubectl apply -f -
+      imagePullSecrets:
+        - name: ecr-secret
+
       initContainers:
         # GGUF 파일이 이미 있으면 다운로드를 건너뛴다(파일명 존재 여부로만 판단).
         # 실패하면 아래 두 컨테이너는 시작조차 하지 않는다.

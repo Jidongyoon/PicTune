@@ -16,6 +16,8 @@ spec:
         app: pictune-web
     spec:
       terminationGracePeriodSeconds: 60
+      imagePullSecrets:
+        - name: ecr-secret
       containers:
         - name: web
           image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-web:v1

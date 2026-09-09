@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pictune-web
+  namespace: pictune
+  labels:
+    app: pictune-web
+  annotations:
+    # Apply the 300-second backend response timeout defined in 03-ingress.yaml.
+    traefik.ingress.kubernetes.io/service.serverstransport: pictune-pictune-web-timeouts@kubernetescrd
+spec:
+  type: ClusterIP
+  selector:
+    app: pictune-web
+  ports:
+    - name: web-http
+      port: 3000
+      targetPort: web-http
+      protocol: TCP

@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pictune-web
+  namespace: pictune
+  labels:
+    app: pictune-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pictune-web
+  template:
+    metadata:
+      labels:
+        app: pictune-web
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: web
+          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-web:v1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: VLM_WORKER_URL
+              value: http://pictune-vlm:8001
+            - name: MUSIC_WORKER_URL
+              value: http://pictune-music:8002
+          ports:
+            - name: web-http
+              containerPort: 3000
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          readinessProbe:
+            httpGet:
+              path: /
+              port: web-http
+              scheme: HTTP
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: web-http
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3

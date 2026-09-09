@@ -1,0 +1,40 @@
+# Traefik buffers request bodies and rejects uploads larger than 10 MiB.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: pictune-web-upload-limit
+  namespace: pictune
+spec:
+  buffering:
+    maxRequestBodyBytes: 10485760
+---
+# The web API waits for long-running music generation before returning headers.
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: pictune-web-timeouts
+  namespace: pictune
+spec:
+  forwardingTimeouts:
+    responseHeaderTimeout: 300s
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pictune-web
+  namespace: pictune
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: pictune-pictune-web-upload-limit@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pictune-web
+                port:
+                  number: 3000

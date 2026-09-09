@@ -64,12 +64,15 @@ spec:
                 name: pictune-vlm-config
           env:
             # huggingface_hub 가 자동으로 읽는다(코드 수정 불필요).
-            # Secret(pictune-hf-token)을 이 Deployment 보다 먼저 적용해야 한다.
+            # HF Hub rate limit 완화용이며 없어도 익명 다운로드로 동작한다.
+            # optional: true — Secret(pictune-hf-token)이 아직 없어도 Pod 가 뜨게 한다.
+            # 빼면 Secret 미적용 시 CreateContainerConfigError 로 Pod 가 시작조차 못 한다.
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: pictune-hf-token
                   key: HF_TOKEN
+                  optional: true
           resources:
             requests:
               cpu: 100m

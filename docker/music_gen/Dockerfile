@@ -1,7 +1,8 @@
 # PicTune MusicGen 워커
-# 빌드 컨텍스트는 이 파일이 있는 폴더가 아니라 상위 ai/ 이다.
-# main.py가 ../job_runner.py를 import 하므로 둘 다 컨텍스트에 있어야 한다.
-#   docker build -f ai/music-worker/Dockerfile -t pictune-music ai
+# 이 파일은 docker/music_gen/ 에 있지만 빌드 컨텍스트는 여전히 ai/ 이다.
+# main.py가 ../job_runner.py를 import 하므로 job_runner.py와 music-worker/가 둘 다
+# 컨텍스트(ai/)에 있어야 하고, -f로 Dockerfile 경로만 별도 지정한다.
+#   docker build -f docker/music_gen/Dockerfile -t pictune-music ai
 
 # 1. [Base Image] 호환성과 경량화를 만족하는 표준 베이스 이미지
 # scipy==1.13.1이 3.12까지 지원하므로 3.11로 고정한다.

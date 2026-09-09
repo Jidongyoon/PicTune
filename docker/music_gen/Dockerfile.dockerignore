@@ -1,0 +1,12 @@
+# 빌드 컨텍스트는 ai/ 이지만 Dockerfile은 docker/music_gen/ 에 있다.
+# BuildKit은 컨텍스트 루트에서 "<Dockerfile 경로>.dockerignore" 이름의 파일을 찾으므로
+# (docker/web/Dockerfile.web 헤더 주석 참고), 이 파일 이름과 위치가 정확히 일치해야 적용된다.
+# 없으면 로컬 .venv(각 1.6GB)와 models/가 그대로 이미지에 복사된다.
+models/
+**/.venv/
+.venv-musicgen/
+**/__pycache__/
+*.pyc
+tests/
+*.md
+**/Dockerfile

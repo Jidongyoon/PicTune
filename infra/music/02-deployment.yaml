@@ -35,12 +35,14 @@ spec:
               value: "2"
             - name: MKL_NUM_THREADS
               value: "2"
-            # huggingface_hub가 자동으로 읽는다(코드 수정 불필요). Secret은 별도 파일로 먼저 적용한다.
+            # huggingface_hub가 자동으로 읽는다(코드 수정 불필요). optional: true라 Secret이
+            # 아직 없거나 나중에 지워져도 Pod는 그냥 이 값 없이(익명 요청으로) 뜬다.
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: pictune-hf-token
                   key: HF_TOKEN
+                  optional: true
           resources:
             requests:
               cpu: 800m

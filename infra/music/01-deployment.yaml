@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pictune-music
+  namespace: pictune
+  labels:
+    app: pictune-music
+spec:
+  # 모델이 프로세스 메모리에 상주하는 구조라(ai/music-worker/music.py, import 시점에 로드)
+  # RollingUpdate로 신구 Pod가 겹치면 순간적으로 메모리 요구량이 2배가 된다.
+  # vlm과 동일한 이유로 Recreate를 쓴다.
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pictune-music
+  template:
+    metadata:
+      labels:
+        app: pictune-music
+    spec:
+      # 취소 로직이 실제 연산 종료까지 기다린 뒤 반환하므로(ai/job_runner.py) 종료 유예를 넉넉히 둔다.
+      terminationGracePeriodSeconds: 180
+      containers:
+        - name: music-worker
+          image: min9yu38/pictune-music:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: music-http
+              containerPort: 8002
+          env:
+            # torch/numpy가 노드 4코어를 전부 점유해 vlm(llama-server)과 자원을 다투지 않도록 제한
+            - name: OMP_NUM_THREADS
+              value: "2"
+            - name: MKL_NUM_THREADS
+              value: "2"
+            # huggingface_hub가 자동으로 읽는다(코드 수정 불필요). Secret은 별도 파일로 먼저 적용한다.
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: pictune-hf-token
+                  key: HF_TOKEN
+          resources:
+            requests:
+              cpu: 800m
+              memory: 3Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          # 첫 기동 시 MusicGen(~2GB) 다운로드+로딩. 그 전에는 uvicorn이 포트를 열지 않는다
+          # (main.py가 model import를 app 생성보다 먼저 실행하므로 이 자체가 곧 로딩 완료 신호).
+          startupProbe:
+            httpGet:
+              path: /health
+              port: music-http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 40
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: music-http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # music-api의 /health는 자체 완결형(다른 컨테이너를 호출하지 않음)이라 httpGet도 안전하지만,
+          # vlm-api/web과 동일하게 liveness는 tcpSocket으로 통일한다.
+          livenessProbe:
+            tcpSocket:
+              port: music-http
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 5
+          volumeMounts:
+            # 이미지의 HF_HOME=/cache(docker/music_gen/Dockerfile)와 반드시 일치해야 한다.
+            - name: music-cache
+              mountPath: /cache
+      volumes:
+        - name: music-cache
+          hostPath:
+            # 노드에 이미 준비된 디렉터리: /cache/musicgen (manifest_guide.md의 /cache/music과 다름, 실제 노드 기준)
+            # DirectoryOrCreate 금지 — kubelet이 root 소유로 만들면 UID 10001이 못 씀
+            path: /cache/musicgen
+            type: Directory

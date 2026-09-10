@@ -126,9 +126,8 @@ spec:
             - "-ngl"
             - "0"
             # 미지정 시 노드 전체 코어를 점유해 music-worker 와 충돌한다.
-            # requests.cpu 와 맞춘 값이다.
             - "--threads"
-            - "2"
+            - "4"
             # 프롬프트/KV 캐시 완전 비활성화. 기본값(--cache-prompt, --cache-idle-slots
             # 모두 enabled)에서는 idle 슬롯이 최대 8192MiB(-cram 기본값)까지 캐시 풀에
             # 쌓여 컨테이너 memory limit(4Gi)을 넘길 수 있었다.
@@ -143,7 +142,7 @@ spec:
               cpu: 1000m
               memory: 3Gi
             limits:
-              cpu: 2000m
+              cpu: 3500m
               memory: 4Gi
           # 모델(1.6GB) + mmproj(0.7GB) 로딩에 시간이 걸린다.
           # 10초 x 40회 = 최대 약 6분 40초. startupProbe 가 성공할 때까지

@@ -7,6 +7,21 @@ import ResultPlayer from "@/app/components/ResultPlayer";
 
 type Status = "idle" | "uploading" | "done" | "error";
 
+function createJobId() {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  // randomUUID() is unavailable on non-secure origins such as an HTTP IP address.
+  // getRandomValues() remains available there, so build an RFC 4122 UUID v4.
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+}
+
 export default function Home() {
   const [status, setStatus] = useState<Status>("idle");
   const [prompt, setPrompt] = useState<string | null>(null);
@@ -24,7 +39,7 @@ export default function Home() {
 
   async function handleSubmit(file: File, seconds: number) {
     if (jobRef.current) return;
-    const jobId = crypto.randomUUID();
+    const jobId = createJobId();
     jobRef.current = jobId;
     setCancelError(null);
     setStatus("uploading");

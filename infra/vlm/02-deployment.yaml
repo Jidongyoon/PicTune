@@ -48,7 +48,6 @@ spec:
       # hostPath 볼륨 소유자(10001)와 확실히 맞추기 위함이다.
       securityContext:
         runAsUser: 10001
-        runAsGroup: 10001
       # ECR 프라이빗 레지스트리 인증. EKS 와 달리 k3s 는 노드 IAM 역할로
       # ECR 을 자동 인증하지 못하므로 pull secret 이 필요하다.
       # initContainers 를 포함한 이 Pod 의 모든 컨테이너에 적용된다.
@@ -67,6 +66,7 @@ spec:
           image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-model-init:smolvlm2-1bc3c9f
           imagePullPolicy: IfNotPresent
           securityContext:
+            runAsUser: 10001
             runAsNonRoot: true
             allowPrivilegeEscalation: false
           envFrom:
@@ -99,6 +99,7 @@ spec:
           image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-llama-server:server
           imagePullPolicy: IfNotPresent
           securityContext:
+            runAsUser: 10001
             runAsNonRoot: true
             allowPrivilegeEscalation: false
           # K8s 의 args 는 이미지의 CMD 를 부분 수정할 수 없고 통째로 대체한다.
@@ -173,6 +174,7 @@ spec:
           image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-api:v1
           imagePullPolicy: IfNotPresent
           securityContext:
+            runAsUser: 10001
             runAsNonRoot: true
             allowPrivilegeEscalation: false
           # LLAMA_SERVER_URL 을 127.0.0.1:8003 으로 덮어쓰기 위해 반드시 필요하다.

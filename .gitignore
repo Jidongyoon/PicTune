@@ -16,3 +16,6 @@ ai/.venv-musicgen/
 
 # Model weights (download separately, see SETUP.md)
 ai/models/
+
+# refresh-ecr-token
+infra/refresh-ecr-token.sh

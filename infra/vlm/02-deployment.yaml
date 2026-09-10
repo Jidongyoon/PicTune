@@ -49,7 +49,6 @@ spec:
       securityContext:
         runAsUser: 10001
         runAsGroup: 10001
-
       # ECR 프라이빗 레지스트리 인증. EKS 와 달리 k3s 는 노드 IAM 역할로
       # ECR 을 자동 인증하지 못하므로 pull secret 이 필요하다.
       # initContainers 를 포함한 이 Pod 의 모든 컨테이너에 적용된다.
@@ -61,7 +60,6 @@ spec:
       #       -n pictune --dry-run=client -o yaml | kubectl apply -f -
       imagePullSecrets:
         - name: ecr-secret
-
       initContainers:
         # GGUF 파일이 이미 있으면 다운로드를 건너뛴다(파일명 존재 여부로만 판단).
         # 실패하면 아래 두 컨테이너는 시작조차 하지 않는다.
@@ -88,15 +86,14 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 512Mi
+              memory: 2Gi
             limits:
               cpu: 500m
               memory: 2Gi
           volumeMounts:
             - name: vlm-cache
               mountPath: /cache/vlm
-              readOnly: false      # 여기에 모델을 내려받아야 한다
-
+              readOnly: false # 여기에 모델을 내려받아야 한다
       containers:
         - name: llama-server
           image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-llama-server:server
@@ -171,8 +168,7 @@ spec:
           volumeMounts:
             - name: vlm-cache
               mountPath: /cache/vlm
-              readOnly: true       # model-init 이 받아둔 것을 읽기만 한다
-
+              readOnly: true # model-init 이 받아둔 것을 읽기만 한다
         - name: vlm-api
           image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-api:v1
           imagePullPolicy: IfNotPresent
@@ -217,7 +213,6 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 6
-
       volumes:
         # 단일 노드 구성이므로 hostPath 로 충분하다.
         # type: Directory 로 두어 사전 준비가 안 됐을 때 명확히 실패시킨다.

@@ -95,6 +95,7 @@ jobs:
     if: needs.changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment: ${{ matrix.repository }}
 
     strategy:
       fail-fast: false

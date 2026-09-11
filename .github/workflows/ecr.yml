@@ -106,7 +106,37 @@ jobs:
         uses: actions/checkout@v6
 
       # Set these repository variables under Settings > Secrets and variables > Actions.
-      # The role must trust this repository's main branch and allow pushes to all four ECR repositories.
+      # The role must trust this job's GitHub Environment and allow ECR pushes.
+      - name: Diagnose OIDC identity
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          DEPLOY_ENVIRONMENT: ${{ matrix.repository }}
+        run: |
+          python3 - <<'PYTHON'
+          import base64
+          import json
+          import os
+          import urllib.request
+
+          role = os.environ.get("AWS_ROLE_ARN", "")
+          if not role:
+              raise SystemExit("AWS_ROLE_ARN variable is missing")
+          url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]
+          url += ("&" if "?" in url else "?") + "audience=sts.amazonaws.com"
+          request = urllib.request.Request(url, headers={
+              "Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]
+          })
+          with urllib.request.urlopen(request, timeout=30) as response:
+              token = json.load(response)["value"]
+          payload = token.split(".")[1]
+          claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+          # Print only identity metadata, never the JWT or request credential.
+          print("AWS_ROLE_ARN: " + role)
+          print("Environment: " + os.environ["DEPLOY_ENVIRONMENT"])
+          for key in ("iss", "aud", "sub", "repository", "ref", "workflow_ref"):
+              print(key + ": " + str(claims.get(key, "")))
+          PYTHON
+
       - name: Authenticate to AWS
         uses: aws-actions/configure-aws-credentials@v6.2.4
         with:

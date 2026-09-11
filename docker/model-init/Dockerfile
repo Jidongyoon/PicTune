@@ -17,5 +17,5 @@ ENV HF_HOME=/cache/vlm/.huggingface \
     VLM_MODEL_DIR=/cache/vlm
 
 USER 10001
-
+ 
 ENTRYPOINT ["python", "/usr/local/bin/download_models.py"]

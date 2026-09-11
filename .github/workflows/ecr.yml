@@ -1,0 +1,131 @@
+name: Build and push to ECR
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  changes:
+    name: Select changed images
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      has-changes: ${{ steps.matrix.outputs.has-changes }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Detect changed files
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          # Compare against the commit before this push, including multi-commit pushes.
+          base: ${{ github.ref }}
+          filters: |
+            pictune-llama-server:
+              - 'docker/llama-server/**'
+              - '.github/workflows/ecr.yml'
+            pictune-web:
+              - 'app/**'
+              - 'public/**'
+              - 'src/**'
+              - 'components/**'
+              - 'lib/**'
+              - 'styles/**'
+              - 'pages/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'next.config.*'
+              - 'tsconfig*.json'
+              - 'jsconfig*.json'
+              - 'postcss.config.*'
+              - 'tailwind.config.*'
+              - 'middleware.*'
+              - 'proxy.*'
+              - 'instrumentation*'
+              - '.npmrc'
+              - '.env'
+              - '.env.production'
+              - 'docker/web/**'
+              - '.github/workflows/ecr.yml'
+            pictune-vlm-api:
+              - 'ai/job_runner.py'
+              - 'ai/vlm-worker/main.py'
+              - 'ai/vlm-worker/caption.py'
+              - 'ai/vlm-worker/requirements.txt'
+              - 'docker/smolvlm/**'
+              - '.github/workflows/ecr.yml'
+            pictune-vlm-model-init:
+              - 'docker/model-init/**'
+              - '.github/workflows/ecr.yml'
+
+      - name: Create build matrix
+        id: matrix
+        env:
+          CHANGED: ${{ steps.filter.outputs.changes }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - <<'PYTHON'
+          import json
+          import os
+
+          services = [
+              {"repository": "pictune-llama-server", "context": "./docker/llama-server", "dockerfile": "./docker/llama-server/Dockerfile"},
+              {"repository": "pictune-web", "context": ".", "dockerfile": "./docker/web/Dockerfile.web"},
+              {"repository": "pictune-vlm-api", "context": ".", "dockerfile": "./docker/smolvlm/Dockerfile"},
+              {"repository": "pictune-vlm-model-init", "context": "./docker/model-init", "dockerfile": "./docker/model-init/Dockerfile"},
+          ]
+          changed = json.loads(os.environ["CHANGED"])
+          selected = [s for s in services if os.environ["EVENT_NAME"] == "workflow_dispatch" or s["repository"] in changed]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("matrix=" + json.dumps({"include": selected}) + "\n")
+              output.write("has-changes=" + str(bool(selected)).lower() + "\n")
+          PYTHON
+
+  build-and-push:
+    name: Build ${{ matrix.repository }}
+    needs: changes
+    if: needs.changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # Set these repository variables under Settings > Secrets and variables > Actions.
+      # The role must trust this repository's main branch and allow pushes to all four ECR repositories.
+      - name: Authenticate to AWS
+        uses: aws-actions/configure-aws-credentials@v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPOSITORY: ${{ matrix.repository }}
+          IMAGE_TAG: ${{ github.sha }}
+          BUILD_CONTEXT: ${{ matrix.context }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+        run: |
+          set -euo pipefail
+          IMAGE="$REGISTRY/$REPOSITORY:$IMAGE_TAG"
+          docker build --platform linux/amd64 -f "$DOCKERFILE" -t "$IMAGE" "$BUILD_CONTEXT"
+          docker push "$IMAGE"
+          echo "Published: $IMAGE" >> "$GITHUB_STEP_SUMMARY"

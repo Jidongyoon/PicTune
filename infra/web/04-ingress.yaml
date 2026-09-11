@@ -26,6 +26,7 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
     traefik.ingress.kubernetes.io/router.middlewares: pictune-pictune-web-upload-limit@kubernetescrd
+    traefik.ingress.kubernetes.io/router.priority: "1"
 spec:
   ingressClassName: traefik
   rules:

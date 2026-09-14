@@ -20,7 +20,7 @@ spec:
         - name: ecr-secret
       containers:
         - name: web
-          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-web:v1
+          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-web:442975debcd9203f12f909c5bfa86cfd85ecddbb
           imagePullPolicy: IfNotPresent
           env:
             - name: VLM_WORKER_URL

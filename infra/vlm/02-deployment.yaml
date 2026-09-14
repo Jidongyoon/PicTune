@@ -63,7 +63,7 @@ spec:
         # GGUF 파일이 이미 있으면 다운로드를 건너뛴다(파일명 존재 여부로만 판단).
         # 실패하면 아래 두 컨테이너는 시작조차 하지 않는다.
         - name: model-init
-          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-model-init:v1
+          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-model-init:442975debcd9203f12f909c5bfa86cfd85ecddbb
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 10001
@@ -96,7 +96,7 @@ spec:
               readOnly: false # 여기에 모델을 내려받아야 한다
       containers:
         - name: llama-server
-          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-llama-server:v1
+          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-llama-server:442975debcd9203f12f909c5bfa86cfd85ecddbb
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 10001
@@ -175,7 +175,7 @@ spec:
               mountPath: /cache/vlm
               readOnly: true # model-init 이 받아둔 것을 읽기만 한다
         - name: vlm-api
-          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-api:v1
+          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-api:442975debcd9203f12f909c5bfa86cfd85ecddbb
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 10001

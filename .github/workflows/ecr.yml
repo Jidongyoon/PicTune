@@ -1,14 +1,11 @@
 name: Build and push to ECR
-
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
   id-token: write
-
 jobs:
   changes:
     name: Select changed images
@@ -21,7 +18,6 @@ jobs:
       has-changes: ${{ steps.matrix.outputs.has-changes }}
     steps:
       - uses: actions/checkout@v6
-
       - name: Detect changed files
         id: filter
         uses: dorny/paths-filter@v4
@@ -65,7 +61,6 @@ jobs:
             pictune-vlm-model-init:
               - 'docker/model-init/**'
               - '.github/workflows/ecr.yml'
-
       - name: Create build matrix
         id: matrix
         env:
@@ -78,7 +73,7 @@ jobs:
 
           services = [
               {"repository": "pictune-llama-server", "context": "./docker/llama-server", "dockerfile": "./docker/llama-server/Dockerfile"},
-              {"repository": "pictune-web", "context": ".", "dockerfile": "./docker/web/Dockerfile.web"},
+              {"repository": "pictune-web", "context": ".", "dockerfile": "./docker/web/Dockerfile"},
               {"repository": "pictune-vlm-api", "context": ".", "dockerfile": "./docker/smolvlm/Dockerfile"},
               {"repository": "pictune-vlm-model-init", "context": "./docker/model-init", "dockerfile": "./docker/model-init/Dockerfile"},
           ]
@@ -88,7 +83,6 @@ jobs:
               output.write("matrix=" + json.dumps({"include": selected}) + "\n")
               output.write("has-changes=" + str(bool(selected)).lower() + "\n")
           PYTHON
-
   build-and-push:
     name: Build ${{ matrix.repository }}
     needs: changes
@@ -96,15 +90,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: ${{ matrix.repository }}
-
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
       # Set these variables per-environment under Settings > Environments > <name> > Variables.
       # The role's trust policy must allow this repository's environments (see ecr.yml history for the sub condition).
       - name: Authenticate to AWS
@@ -112,11 +103,9 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
-
       - name: Login to ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
-
       - name: Build and push
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}

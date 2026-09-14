@@ -20,7 +20,7 @@ class GenerateRequest(BaseModel):
     seconds: float = Field(default=8.0, ge=1, le=30)
 
 
-@app.get("/health")
+@app.get("/healthz")
 def health():
     return {"status": "ok"}
 

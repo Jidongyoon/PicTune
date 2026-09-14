@@ -168,7 +168,7 @@ initContainer의 요청량은 본 컨테이너와 동시에 계산되지 않으�
 **web Deployment**
 - env 2개 필수: `VLM_WORKER_URL`, `MUSIC_WORKER_URL` (2.2 표의 값)
   - 빠뜨리면 코드 기본값 `http://localhost:8001`로 붙어 **에러 로그 없이 502**가 난다
-- probe: readiness `httpGet /`, liveness `tcpSocket`. startupProbe는 불필요(기동이 빠름)
+- probe: readiness `httpGet /readyz` (VLM·Music 준비 상태 확인), liveness `tcpSocket`. startupProbe는 불필요(기동이 빠름)
 - 볼륨 없음, `terminationGracePeriodSeconds: 60`
 
 **Ingress** — 이 프로젝트에서 가장 위험한 파일
@@ -254,8 +254,8 @@ args:
 
 **vlm-api 컨테이너**
 - `envFrom`으로 ConfigMap 연결
-- **liveness는 반드시 `tcpSocket`** — `/health`가 내부적으로 llama의 `/slots`를 호출하므로(`caption.py:53`), httpGet으로 하면 llama 기동 중에 vlm-api가 재시작 루프에 빠진다
-- readiness는 `httpGet /health`, `timeoutSeconds: 6` (llama 왕복 포함)
+- **liveness는 반드시 `tcpSocket`** — `/healthz`가 내부적으로 llama의 `/slots`를 호출하므로(`caption.py:53`), httpGet으로 하면 llama 기동 중에 vlm-api가 재시작 루프에 빠진다
+- readiness는 `httpGet /healthz`, `timeoutSeconds: 6` (llama 왕복 포함)
 - **볼륨 마운트 없음** — 모델 파일을 직접 읽지 않는다
 
 **Deployment 공통**

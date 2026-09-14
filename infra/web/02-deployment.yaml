@@ -44,11 +44,11 @@ spec:
             allowPrivilegeEscalation: false
           readinessProbe:
             httpGet:
-              path: /
+              path: /readyz
               port: web-http
               scheme: HTTP
             periodSeconds: 5
-            timeoutSeconds: 3
+            timeoutSeconds: 7
             failureThreshold: 3
           livenessProbe:
             tcpSocket:

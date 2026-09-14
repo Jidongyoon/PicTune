@@ -72,10 +72,12 @@ npm run dev
 ## 헬스 체크
 
 ```bash
+curl http://localhost:3000/healthz
+curl http://localhost:3000/readyz
 curl http://localhost:8003/health
 curl http://localhost:8003/slots
-curl http://localhost:8001/health
-curl http://localhost:8002/health
+curl http://localhost:8001/healthz
+curl http://localhost:8002/healthz
 ```
 
 ## 참고

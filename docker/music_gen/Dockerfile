@@ -50,7 +50,7 @@ EXPOSE 8002
 # 볼륨이 빈 첫 기동에는 모델(약 2GB) 다운로드 + CPU 로딩이 있어 start-period를 길게 준다.
 # 그 사이 retries가 소진되면 계속 unhealthy로 남으므로 retries도 함께 늘린다.
 HEALTHCHECK --interval=10s --timeout=5s --start-period=300s --retries=60 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health')"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/healthz')"
 
 # 10. [Entrypoint] PID 1 시그널 수신을 위한 Exec Form 포그라운드 기동
 # --workers 1: 모델을 프로세스당 한 번만 올리고, 취소용 작업 상태를 한 프로세스에서 관리한다.

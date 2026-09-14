@@ -3,9 +3,9 @@
 # PicTune 웹앱(Next.js 프론트+백엔드 API) 이미지.
 # 빌드 컨텍스트는 레포 루트여야 한다 (package.json, app/, public/ 등이 루트에 있음).
 # Dockerfile은 docker/web/ 아래로 옮겼지만 -f로 경로만 지정하면 컨텍스트는 그대로 루트를 쓰면 된다:
-#   docker buildx build --platform linux/amd64,linux/arm64 -f docker/web/Dockerfile.web -t pictune-web:latest .
+#   docker buildx build --platform linux/amd64,linux/arm64 -f docker/web/Dockerfile -t pictune-web:latest .
 #
-# ignore 파일은 docker/web/Dockerfile.web.dockerignore 이다 (BuildKit이 컨텍스트 루트에서
+# ignore 파일은 docker/web/Dockerfile.dockerignore 이다 (BuildKit이 컨텍스트 루트에서
 # "<Dockerfile 경로>.dockerignore" 이름의 파일을 찾는 규칙을 따른 것 — 루트의 .dockerignore보다 우선 적용됨).
 #
 # 런타임에 반드시 넘겨야 하는 환경변수 (기본값은 로컬 개발용 localhost라 컨테이너 간에는 안 통함):
@@ -40,6 +40,6 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-HEALTHCHECK --interval=30s --timeout=3s CMD wget -q --spider http://127.0.0.1:3000/ || exit 1
+HEALTHCHECK --interval=30s --timeout=3s CMD wget -q --spider http://127.0.0.1:3000/healthz || exit 1
 
 CMD ["node", "server.js"]

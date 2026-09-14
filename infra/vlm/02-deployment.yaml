@@ -198,19 +198,19 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
-          # /health 가 내부적으로 llama-server 의 /slots 를 호출한다(caption.py:53).
+          # /healthz 가 내부적으로 llama-server 의 /slots 를 호출한다(caption.py:53).
           # llama-server 가 로딩 중이면 503 이 나고, 그동안 이 Pod 는 Service
           # 엔드포인트에서 빠진다. 의도한 동작이다.
           # 내부 httpx 타임아웃이 5초라 timeoutSeconds 는 그보다 커야 한다.
           readinessProbe:
             httpGet:
-              path: /health
+              path: /healthz
               port: vlm-http
             periodSeconds: 10
             timeoutSeconds: 6
             failureThreshold: 3
           # liveness 는 반드시 tcpSocket 으로 둔다.
-          # httpGet /health 로 하면 llama-server 로딩 중(최대 6분 40초) 멀쩡한
+          # httpGet /healthz 로 하면 llama-server 로딩 중(최대 6분 40초) 멀쩡한
           # vlm-api 가 "죽었다"고 판정되어 재시작 루프에 빠진다.
           livenessProbe:
             tcpSocket:

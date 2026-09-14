@@ -14,7 +14,7 @@ app = FastAPI(title="PicTune VLM Worker")
 jobs = JobRunner()
 
 
-@app.get("/health")
+@app.get("/healthz")
 async def health():
     try:
         async with httpx.AsyncClient(timeout=5, trust_env=False) as client:

@@ -204,7 +204,7 @@ spec:
             runAsNonRoot: true
           readinessProbe:
             httpGet:
-              path: /health
+              path: /healthz
               port: vlm-http
             periodSeconds: 5
             timeoutSeconds: 6

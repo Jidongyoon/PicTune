@@ -1,0 +1,235 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-adapter
+  namespace: monitoring
+---
+# Adapter가 Kubernetes 리소스를 조회하기 위한 권한
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-adapter
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - nodes
+      - pods
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-adapter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-adapter
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-adapter
+    namespace: monitoring
+---
+# Aggregated API 인증/인가 위임 권한
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-adapter-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-adapter
+    namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus-adapter-auth-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-adapter
+    namespace: monitoring
+---
+# HPA 컨트롤러가 External Metrics API를 읽을 권한
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-external-metrics-reader
+rules:
+  - apiGroups:
+      - external.metrics.k8s.io
+    resources:
+      - "*"
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-external-metrics-hpa
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-external-metrics-reader
+subjects:
+  # k3s 내장 kube-controller-manager
+  - kind: User
+    apiGroup: rbac.authorization.k8s.io
+    name: system:kube-controller-manager
+
+  # 일반적인 Kubernetes HPA 컨트롤러 구성도 지원
+  - kind: ServiceAccount
+    name: horizontal-pod-autoscaler
+    namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-adapter-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    rules: []
+
+    externalRules:
+      - seriesQuery: 'pod_cpu_usage_seconds_total{namespace="pictune",pod=~"pictune-vlm-.*"}'
+
+        resources:
+          # HPA와 소스 파드가 다른 namespace여도 조회 가능
+          namespaced: false
+
+        name:
+          matches: "^pod_cpu_usage_seconds_total$"
+          as: "pictune_vlm_pod_cpu_over_3000m_1m"
+
+        # 각 결과는 namespace/pod 라벨을 유지하며, 3000m는 3 CPU cores입니다.
+        # 비교 연산에 bool을 쓰지 않아 임계값을 초과한 파드만 반환합니다.
+        metricsQuery: |
+          sum by (namespace, pod) (
+            rate(
+              pod_cpu_usage_seconds_total{
+                namespace="pictune",
+                pod=~"pictune-vlm-.*"
+              }[1m]
+            )
+          ) > 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-adapter
+  namespace: monitoring
+spec:
+  selector:
+    app: prometheus-adapter
+  ports:
+    - name: https
+      port: 443
+      targetPort: https
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-adapter
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-adapter
+  template:
+    metadata:
+      labels:
+        app: prometheus-adapter
+    spec:
+      serviceAccountName: prometheus-adapter
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: prometheus-adapter
+          image: registry.k8s.io/prometheus-adapter/prometheus-adapter:v0.12.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --secure-port=6443
+            - --cert-dir=/var/run/serving-cert
+            - --config=/etc/adapter/config.yaml
+            - --prometheus-url=http://prometheus.monitoring.svc:9090/prometheus
+            - --metrics-relist-interval=30s
+            - --metrics-max-age=2m
+          ports:
+            - name: https
+              containerPort: 6443
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: https
+              scheme: HTTPS
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/adapter
+              readOnly: true
+            - name: serving-cert
+              mountPath: /var/run/serving-cert
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-adapter-config
+        - name: serving-cert
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+# 기존 metrics.k8s.io는 k3s metrics-server가 계속 담당합니다.
+# Adapter에는 external.metrics.k8s.io만 등록합니다.
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.external.metrics.k8s.io
+spec:
+  group: external.metrics.k8s.io
+  version: v1beta1
+  groupPriorityMinimum: 100
+  versionPriority: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: prometheus-adapter
+    namespace: monitoring

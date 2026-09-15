@@ -173,7 +173,7 @@ spec:
               mountPath: /cache/vlm
               readOnly: true # model-init 이 받아둔 것을 읽기만 한다
         - name: vlm-api
-          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-api:442975debcd9203f12f909c5bfa86cfd85ecddbb
+          image: 508266022472.dkr.ecr.ap-northeast-2.amazonaws.com/pictune-vlm-api:685467a93cc6d4dbeb8c759c353563120dfa232d
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 10001

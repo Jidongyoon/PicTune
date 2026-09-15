@@ -1,0 +1,35 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pictune-worker-hpa
+  namespace: pictune
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pictune-music
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: pictune_vlm_pod_cpu_1m
+        target:
+          type: Value
+          value: 3000m
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      selectPolicy: Max
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 180
+      selectPolicy: Max
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60

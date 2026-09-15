@@ -90,7 +90,6 @@ subjects:
   - kind: User
     apiGroup: rbac.authorization.k8s.io
     name: system:kube-controller-manager
-
   # 일반적인 Kubernetes HPA 컨트롤러 구성도 지원
   - kind: ServiceAccount
     name: horizontal-pod-autoscaler
@@ -114,19 +113,19 @@ data:
 
         name:
           matches: "^pod_cpu_usage_seconds_total$"
-          as: "pictune_vlm_pod_cpu_over_3000m_1m"
+          as: "pictune_vlm_pod_cpu_1m"
 
-        # 각 결과는 namespace/pod 라벨을 유지하며, 3000m는 3 CPU cores입니다.
-        # 비교 연산에 bool을 쓰지 않아 임계값을 초과한 파드만 반환합니다.
         metricsQuery: |
-          sum by (namespace, pod) (
-            rate(
-              pod_cpu_usage_seconds_total{
-                namespace="pictune",
-                pod=~"pictune-vlm-.*"
-              }[1m]
+          (
+            max(
+              rate(
+                pod_cpu_usage_seconds_total{
+                  namespace="pictune",
+                  pod=~"pictune-vlm-.*"
+                }[1m]
+              )
             )
-          ) > 3
+          ) or vector(0)
 ---
 apiVersion: v1
 kind: Service

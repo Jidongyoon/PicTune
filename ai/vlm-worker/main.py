@@ -8,10 +8,10 @@ from fastapi.responses import JSONResponse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from job_runner import JobRunner
-from caption import analyze_image, CaptionError, slots
+from caption import LLAMA_SERVER_PARALLEL, analyze_image, CaptionError, slots
 
 app = FastAPI(title="PicTune VLM Worker")
-jobs = JobRunner()
+jobs = JobRunner(concurrency=LLAMA_SERVER_PARALLEL)
 
 
 @app.get("/healthz")

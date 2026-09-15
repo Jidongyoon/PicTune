@@ -7,6 +7,13 @@ import httpx
 from job_runner import JobCancelled, check_cancel
 
 LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://127.0.0.1:8003").rstrip("/")
+LLAMA_SERVER_PARALLEL = int(os.getenv("LLAMA_SERVER_PARALLEL", "1"))
+if LLAMA_SERVER_PARALLEL < 1:
+    raise ValueError("LLAMA_SERVER_PARALLEL must be a positive integer")
+
+_available_slots = asyncio.Queue()
+for _slot_id in range(LLAMA_SERVER_PARALLEL):
+    _available_slots.put_nowait(_slot_id)
 
 PROMPT = (
     "Analyze this image for the purpose of generating background music. "
@@ -54,24 +61,51 @@ async def slots(client):
     response = await client.get(LLAMA_SERVER_URL + "/slots")
     response.raise_for_status()
     result = response.json()
-    if not isinstance(result, list) or len(result) != 1 or "is_processing" not in result[0]:
-        raise CaptionError("llama-server must expose exactly one slot (--parallel 1 --slots)")
+    expected_ids = set(range(LLAMA_SERVER_PARALLEL))
+    if (
+        not isinstance(result, list)
+        or len(result) != LLAMA_SERVER_PARALLEL
+        or any(not isinstance(slot, dict) or "is_processing" not in slot for slot in result)
+        or {slot.get("id") for slot in result} != expected_ids
+    ):
+        raise CaptionError(
+            "llama-server slot count must match LLAMA_SERVER_PARALLEL "
+            f"({LLAMA_SERVER_PARALLEL}) and expose --slots"
+        )
     return result
 
 
-async def wait_idle(client):
-    # Do not release our job lock or acknowledge cancellation while inference may live.
+async def wait_idle(client, slot_id):
+    # Do not release this slot or acknowledge cancellation while its inference may live.
     # Connection errors are retried; cancel API returns 202 while confirmation is pending.
     while True:
         try:
-            if not (await slots(client))[0]["is_processing"]:
+            state = next(slot for slot in await slots(client) if slot["id"] == slot_id)
+            if not state["is_processing"]:
                 return
-        except (httpx.HTTPError, CaptionError):
+        except (httpx.HTTPError, CaptionError, StopIteration):
             pass
         await asyncio.sleep(.2)
 
 
+async def acquire_slot(cancel_event):
+    while True:
+        check_cancel(cancel_event)
+        try:
+            return await asyncio.wait_for(_available_slots.get(), .1)
+        except asyncio.TimeoutError:
+            pass
+
+
 async def analyze_image(image_bytes, cancel_event):
+    slot_id = await acquire_slot(cancel_event)
+    try:
+        return await _analyze_image(image_bytes, cancel_event, slot_id)
+    finally:
+        _available_slots.put_nowait(slot_id)
+
+
+async def _analyze_image(image_bytes, cancel_event, slot_id):
     check_cancel(cancel_event)
     encoded = base64.b64encode(image_bytes).decode()
     payload = {
@@ -81,7 +115,7 @@ async def analyze_image(image_bytes, cancel_event):
         ]}],
         "stream": True, "max_tokens": 400, "temperature": .2,
         "response_format": {"type": "json_object"},
-        "id_slot": 0,
+        "id_slot": slot_id,
     }
     headers_received = asyncio.Event()
     async with httpx.AsyncClient(timeout=httpx.Timeout(180, connect=5), trust_env=False) as client:
@@ -120,7 +154,7 @@ async def analyze_image(image_bytes, cancel_event):
                 request.cancel()
             await asyncio.gather(request, return_exceptions=True)
             # Dedicated server: no clients other than this single-worker adapter.
-            await wait_idle(client)
+            await wait_idle(client, slot_id)
     check_cancel(cancel_event)
     try:
         data = _extract_json(raw_output)

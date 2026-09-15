@@ -103,6 +103,7 @@ data:
   VLM_REVISION: 1bc3c9f74ceafd4c8d4411cc9cf188bba3798f91
   VLM_MODEL_DIR: /cache/vlm
   LLAMA_SERVER_URL: http://127.0.0.1:8003
+  LLAMA_SERVER_PARALLEL: "2"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -148,19 +149,25 @@ spec:
             - --port
             - "8003"
             - --parallel
-            - "1"
+            - "2"
             - --slots
             - -c
             - "4096"
+            - -ngl
+            - "0"
+            - --threads
+            - "4"
+            - --no-cache-prompt
+            - --no-cache-idle-slots
           ports:
             - name: llama-http
               containerPort: 8003
           resources:
             requests:
-              cpu: "2"
-              memory: 4Gi
+              cpu: "1"
+              memory: 3Gi
             limits:
-              cpu: "8"
+              cpu: "4"
               memory: 6Gi
           securityContext:
             allowPrivilegeEscalation: false
@@ -197,8 +204,8 @@ spec:
               cpu: 100m
               memory: 128Mi
             limits:
-              cpu: "1"
-              memory: 512Mi
+              cpu: 250m
+              memory: 256Mi
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
@@ -235,9 +242,10 @@ spec:
 ```
 
 Next.js에는 `VLM_WORKER_URL=http://pictune-vlm:8001`을 설정합니다. VLM Pod와
-llama-server 슬롯은 각각 하나만 유지하고 `--parallel 1 --slots`를 제거하지
-마세요. 이 조건에서 VLM API는 스트림을 닫은 뒤 `/slots`의
-`is_processing: false`를 확인하고 작업 잠금을 해제합니다.
+llama-server 프로세스는 각각 하나만 유지하되, Kubernetes에서는
+`--parallel 2 --slots`와 `LLAMA_SERVER_PARALLEL=2`를 함께 설정합니다.
+VLM API는 요청마다 슬롯 0/1을 할당하고 스트림을 닫은 뒤 해당 슬롯의
+`is_processing: false`를 확인하고 permit과 슬롯을 반환합니다.
 
 EKS는 일반적으로 노드 IAM 역할을 통해 ECR 이미지를 가져옵니다. 다른
 Kubernetes 환경에서 private ECR을 사용한다면 `imagePullSecrets`가 필요할 수

@@ -15,11 +15,15 @@ def check_cancel(event):
 
 
 class JobRunner:
-    def __init__(self):
+    def __init__(self, concurrency=1):
+        if isinstance(concurrency, bool) or not isinstance(concurrency, int) or concurrency < 1:
+            raise ValueError("concurrency must be a positive integer")
         self.tasks = {}
         self.events = {}
         self.cancelled = {}
-        self.lock = asyncio.Lock()
+        # A one-permit semaphore preserves MusicGen's previous behavior;
+        # VLM configures one permit per llama-server slot.
+        self.lock = asyncio.Semaphore(concurrency)
 
     def check(self, job_id):
         now = time.monotonic()

@@ -10,7 +10,7 @@
 #
 # 두 컨테이너를 한 Pod에 두는 이유 (분리 금지)
 #   - 취소 기능이 localhost 통신을 전제로 설계됐다. docs/incidents/RESIDENT_INFERENCE.md 참고
-#   - caption.py 는 llama-server 의 슬롯 1개를 vlm-api 가 단독 소유한다고 가정한다
+#   - caption.py 는 이 Pod 안의 llama-server 슬롯 2개를 vlm-api 가 단독 소유한다
 #   - llama-server 없이 vlm-api 는 health 조차 통과하지 못한다 (수명주기가 같다)
 #
 # 사전 준비 (노드) — 세 컨테이너 모두 UID 10001 로 실행되므로 캐시 디렉터리
@@ -26,8 +26,8 @@ metadata:
   labels:
     app: pictune-vlm
 spec:
-  # 단일 슬롯 설계라 늘려도 의미가 없고, 늘리면 취소 로직의 슬롯 소유 가정이 깨진다.
-  # HPA 도 붙이지 않는다.
+  # 모델 가중치는 한 프로세스에 한 번만 적재하고, 내부 슬롯 2개로 동시 요청을 처리한다.
+  # VLM Pod 자체에는 HPA를 붙이지 않는다.
   replicas: 1
   # 모델이 프로세스 메모리에 상주하는 구조라 RollingUpdate 로 신구 Pod 가 겹치면
   # 메모리 요구량이 순간적으로 2배가 된다. music 과 동일한 이유로 Recreate 를 쓴다.
@@ -111,11 +111,11 @@ spec:
             - "0.0.0.0"
             - "--port"
             - "8003"
-            # --parallel 1 과 --slots 는 제거 금지.
-            # caption.py 가 슬롯이 정확히 1개인지 검증하고(slots 함수),
-            # 취소 완료를 /slots 의 is_processing 으로 확인한다.
+            # --parallel 값은 ConfigMap의 LLAMA_SERVER_PARALLEL과 일치해야 한다.
+            # caption.py가 슬롯 0/1을 요청별로 할당하고, 취소 완료를 해당 슬롯의
+            # /slots is_processing 값으로 확인한다. --slots는 제거하지 않는다.
             - "--parallel"
-            - "1"
+            - "2"
             - "--slots"
             - "-c"
             - "4096"
@@ -128,7 +128,7 @@ spec:
             - "4"
             # 프롬프트/KV 캐시 완전 비활성화. 기본값(--cache-prompt, --cache-idle-slots
             # 모두 enabled)에서는 idle 슬롯이 최대 8192MiB(-cram 기본값)까지 캐시 풀에
-            # 쌓여 컨테이너 memory limit(4Gi)을 넘길 수 있었다.
+            # 쌓여 컨테이너 memory limit을 넘길 수 있었다.
             - "--no-cache-prompt"
             - "--no-cache-idle-slots"
           ports:
@@ -140,8 +140,8 @@ spec:
               cpu: 1000m
               memory: 3Gi
             limits:
-              cpu: 3500m
-              memory: 4Gi
+              cpu: 4000m
+              memory: 6Gi
           # 모델(1.6GB) + mmproj(0.7GB) 로딩에 시간이 걸린다.
           # 10초 x 40회 = 최대 약 6분 40초. startupProbe 가 성공할 때까지
           # readiness/liveness 는 평가되지 않는다.
@@ -194,7 +194,7 @@ spec:
               cpu: 100m
               memory: 128Mi
             limits:
-              cpu: 500m
+              cpu: 250m
               memory: 256Mi
           # /healthz 가 내부적으로 llama-server 의 /slots 를 호출한다(caption.py:53).
           # llama-server 가 로딩 중이면 503 이 나고, 그동안 이 Pod 는 Service

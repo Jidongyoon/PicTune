@@ -93,12 +93,14 @@ curl http://localhost:8002/healthz
 `POST /api/cancel`에 `{"jobId":"작업 UUID"}`를 보내면 두 워커에 취소를 전달합니다.
 
 - MusicGen: 작업별 `threading.Event`를 확인해 생성·디코딩 경계에서 예외로 중단합니다. 모델은 유지합니다.
-- VLM: 수락된 HTTP 스트림을 닫고, llama-server의 단일 슬롯이 유휴 상태가 될 때까지 기다립니다. 서버는 유지합니다.
+- VLM: 요청마다 할당된 llama-server 슬롯의 HTTP 스트림을 닫고, 해당 슬롯이 유휴 상태가 될 때까지 기다립니다. 다른 슬롯의 작업과 서버는 유지합니다.
 - 현재 native CPU/GPU 연산은 다음 확인 지점까지 진행될 수 있습니다. 중단 확인이 5초 이상 걸리면 워커는 202를 반환하고 UI가 계속 확인합니다.
-- 실제 연산·정리가 끝나기 전에는 작업 잠금을 해제하거나 취소 완료(200)를 반환하지 않습니다.
+- 실제 연산·정리가 끝나기 전에는 해당 작업의 동시성 permit과 슬롯을 반환하거나 취소 완료(200)를 응답하지 않습니다.
 - 취소한 ID는 1시간 동안 차단합니다. 대기 작업 취소는 실행 중인 다른 작업에 영향을 주지 않습니다.
 
-워커별 `--workers 1`, VLM 서버 `--parallel 1 --slots`가 필요합니다.
+API 워커별 `--workers 1`을 유지합니다. 로컬 `start-llama.sh` 기본값은
+`--parallel 1`이며, Kubernetes는 `--parallel 2 --slots`와
+`LLAMA_SERVER_PARALLEL=2`를 함께 설정합니다.
 `ai/job_runner.py`를 포함한 디렉터리 구조를 배포에서도 유지하세요.
 여러 API 복제본을 사용할 경우 작업 소유권을 공유하는 큐와 취소 라우팅을 추가해야 합니다.
 

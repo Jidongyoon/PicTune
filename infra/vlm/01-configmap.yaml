@@ -32,3 +32,5 @@ data:
 
   # --- vlm-api 용 (반드시 필요) ---
   LLAMA_SERVER_URL: http://127.0.0.1:8003
+  # llama-server의 --parallel 값과 반드시 일치해야 한다.
+  LLAMA_SERVER_PARALLEL: "2"

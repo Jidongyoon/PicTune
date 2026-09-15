@@ -16,7 +16,7 @@
    Service를 끼우면 kube-proxy가 중간에 들어가 연결 종료 전파 타이밍이 달라진다.
 
 2. **둘은 1:1로 묶여야 정합성이 유지된다.**
-   `ai/vlm-worker/caption.py:57`은 `/slots` 응답이 정확히 1개가 아니면 에러를 낸다. `job_runner.py`의 락은 "이 llama-server 인스턴스의 단일 슬롯"을 보호한다. 별도 Deployment로 나누면 이 보장이 K8s 레벨에서 깨진다.
+   `ai/vlm-worker/caption.py`는 `/slots` 응답 개수가 `LLAMA_SERVER_PARALLEL`과 다르면 에러를 낸다. `job_runner.py`의 세마포어와 로컬 슬롯 풀은 이 llama-server 인스턴스의 슬롯 0/1을 보호한다. 별도 Deployment로 나누면 이 보장이 K8s 레벨에서 깨진다.
 
 3. **수명주기가 같다.** llama-server 없이 vlm-api는 health조차 통과하지 못한다. 사이드카 패턴의 정석적 조건(강한 결합 / 같은 수명주기 / 같은 노드 필수)에 정확히 부합한다.
 
@@ -25,7 +25,7 @@
 ### 그 외 원칙
 
 - 외부에 노출되는 것은 **web 하나뿐**이다. vlm/music은 ClusterIP로 클러스터 내부에서만 접근한다.
-- 대상 환경은 **16GB / 4 vCPU EC2 단일 노드, CPU 전용(GPU 사용 불가)**이다.
+- 대상 환경은 **16GiB / 8 vCPU 단일 노드, CPU 전용(GPU 사용 불가)**이다.
 
 ---
 
@@ -78,6 +78,7 @@ infra/music/02-service.yaml
 | web | vlm | `http://pictune-vlm:8001` | web env `VLM_WORKER_URL` |
 | web | music | `http://pictune-music:8002` | web env `MUSIC_WORKER_URL` |
 | vlm-api | llama-server | `http://127.0.0.1:8003` | ConfigMap `LLAMA_SERVER_URL` |
+| vlm-api | 슬롯 수 | `2` | ConfigMap `LLAMA_SERVER_PARALLEL` (llama `--parallel`과 일치) |
 
 마지막 항목이 **Service 이름이 아니라 localhost**인 점에 주의. 같은 Pod이기 때문이다.
 
@@ -123,14 +124,14 @@ securityContext:
 
 ---
 
-## 3. 자원 예산 — 16GB / 4 vCPU 단일 노드
+## 3. 자원 예산 — 16GiB / 8 vCPU 단일 노드
 
 ```
-물리          16 GB / 4000m
-- OS/kubelet  -1.0 GB / -300m
-- K8s 시스템   -1.0 GB / -200m   (kube-proxy, CNI, CoreDNS, metrics-server)
+물리          16 GiB / 8000m
+- OS/kubelet  -1.0 GiB / -300m
+- K8s 시스템   -1.0 GiB / -200m   (kube-proxy, CNI, CoreDNS, metrics-server)
 ────────────────────────────
-할당 가능      ~14 GB / ~3500m
+할당 가능      ~14 GiB / ~7500m
 ```
 
 **배정값을 초과하지 않는다.** requests 합이 할당 가능량을 넘으면 Pod가 `Pending`에서 멈춘다.
@@ -138,24 +139,27 @@ securityContext:
 | 담당 | 컨테이너 | CPU req | CPU limit | Mem req | Mem limit |
 |---|---|---|---|---|---|
 | A | web | 100m | 500m | 256Mi | 512Mi |
-| B | llama-server | 1000m | 2000m | 3Gi | 4Gi |
-| B | vlm-api | 100m | 500m | 128Mi | 256Mi |
-| B | model-init (init) | 100m | 500m | 256Mi | 512Mi |
-| C | music | 800m | 2000m | 3Gi | 4Gi |
-| | **합계** | **2000m** | 5000m | **6.4Gi** | 8.75Gi |
-| | 할당 가능 | 3500m | — | 14Gi | — |
+| B | llama-server | 1000m | 4000m | 3Gi | 6Gi |
+| B | vlm-api | 100m | 250m | 128Mi | 256Mi |
+| B | model-init (init) | 100m | 500m | 2Gi | 2Gi |
+| C | music × 2 (HPA 최대) | 1600m | 2000m | 6Gi | 6Gi |
+| — | Prometheus | 100m | 250m | 256Mi | 1Gi |
+| — | Prometheus Adapter | 50m | 250m | 100Mi | 256Mi |
+| | **런타임 최대 합계** | **2950m** | **7250m** | **약 9.72Gi** | **14Gi** |
+| | 할당 가능 | 약 7500m | — | 약 14Gi | — |
 
 initContainer의 요청량은 본 컨테이너와 동시에 계산되지 않으므로(둘 중 큰 값 적용) 합계에서 제외했다.
 
-메모리 값은 **아직 실측이 아니다.** 배포 후 C가 `kubectl top`으로 확인해 조정한다(6절).
+메모리 limit 합계 14Gi에는 OS, kubelet, Traefik 등 시스템 사용량이 포함되지 않는다.
+16GiB 노드에서 동시에 limit에 도달하면 메모리 압박이 발생하므로 배포 후 `kubectl top`과 OOM 이벤트를 확인한다.
 
 ### GPU 사용 불가 — 반드시 지킬 것
 
 | 담당 | 설정 | 안 하면 |
 |---|---|---|
 | B | llama `args`에 `-ngl 0` | 기본값이 GPU 오프로드를 가정. 환경에 따라 조용히 다르게 동작 |
-| B | llama `args`에 `--threads 2` | 노드 4코어를 전부 점유해 music과 충돌 |
-| C | music env `OMP_NUM_THREADS=2`, `MKL_NUM_THREADS=2` | torch가 전 코어 점유 |
+| B | llama `args`에 `--threads 4` | 4 vCPU limit과 실행 스레드 수가 달라져 throttling 또는 과점유 |
+| C | music env `OMP_NUM_THREADS=1`, `MKL_NUM_THREADS=1` | HPA 2 Pod가 각각 여러 CPU 스레드로 경쟁 |
 
 ---
 
@@ -240,14 +244,14 @@ args:
   - --port
   - "8003"
   - --parallel
-  - "1"          # 제거 금지 — caption.py가 슬롯 1개를 전제로 검증한다
+  - "2"          # ConfigMap LLAMA_SERVER_PARALLEL=2와 일치해야 한다
   - --slots      # 제거 금지 — 취소 시 /slots 조회에 필요
   - -c
   - "4096"
   - -ngl
   - "0"
   - --threads
-  - "2"
+  - "4"
 ```
 - 볼륨 `/cache/vlm`을 `readOnly: true`로 마운트
 - startupProbe `failureThreshold: 30` 이상 (모델 로딩 최대 5분)
@@ -270,7 +274,7 @@ args:
 ### C. music + HPA + Secret + 실측
 
 **Deployment / Service** — `infra/music/`에 작성 완료. 아래를 확인만 하면 된다.
-- env `OMP_NUM_THREADS=2`, `MKL_NUM_THREADS=2`
+- env `OMP_NUM_THREADS=1`, `MKL_NUM_THREADS=1` (HPA 최대 2 Pod, Pod당 1000m)
 - startupProbe `periodSeconds 10 × failureThreshold 40` (약 6분 40초) — 첫 기동에 모델 약 2GB 다운로드+로딩
 - 볼륨 `hostPath: /cache/music`, `type: Directory`
   - **노드에서 1회 준비**: `sudo install -d -o 10001 /cache/music`
@@ -355,7 +359,7 @@ kubectl apply --dry-run=client -f <파일>              # 제출 전 문법 검�
 □ securityContext(runAsNonRoot, allowPrivilegeEscalation) 가 있는가
 □ probe의 timeoutSeconds가 기본값(1초)이 아닌가
 □ (A) Ingress 타임아웃 300초, body-size 10m 이 있는가
-□ (B) -ngl 0, --threads 2, --parallel 1, --slots 가 args에 있는가
+□ (B) -ngl 0, --threads 4, --parallel 2, --slots 가 args에 있고 ConfigMap도 2인가
 □ (B) vlm-api의 liveness가 tcpSocket 인가
 □ (B) llama-server용 Service를 만들지 않았는가
 □ (C) OMP_NUM_THREADS, MKL_NUM_THREADS 가 env에 있는가
@@ -378,4 +382,4 @@ kubectl apply --dry-run=client -f <파일>              # 제출 전 문법 검�
 | 이미지 업로드 실패 | nginx `proxy-body-size` 기본 1MB → 10m으로 | A |
 | Ingress를 만들었는데 아무 일도 없음 | Ingress Controller 미설치 (에러도 안 남) | A |
 | HPA가 동작 안 함 | metrics-server 미설치 또는 requests 미설정 | C |
-| 취소했는데 다음 요청이 안 받아짐 | `--parallel 1 --slots` 제거함 | B |
+| VLM health 503 또는 슬롯 할당 실패 | `--parallel`과 `LLAMA_SERVER_PARALLEL` 불일치, 또는 `--slots` 제거 | B |

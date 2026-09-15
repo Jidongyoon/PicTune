@@ -10,6 +10,24 @@ from job_runner import JobRunner, check_cancel
 
 
 class CancellationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_configured_concurrency_runs_two_operations(self):
+        jobs = JobRunner(concurrency=2)
+        first_started = asyncio.Event()
+        second_started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def operation(event, started):
+            started.set()
+            await release.wait()
+            return "done"
+
+        first = asyncio.create_task(jobs.run("first", lambda event: operation(event, first_started)))
+        second = asyncio.create_task(jobs.run("second", lambda event: operation(event, second_started)))
+        await asyncio.wait_for(asyncio.gather(first_started.wait(), second_started.wait()), 1)
+        self.assertTrue(jobs.lock.locked())
+        release.set()
+        self.assertEqual(await asyncio.gather(first, second), ["done", "done"])
+
     async def test_running_cancel_waits_for_thread_and_reuses_model(self):
         jobs = JobRunner()
         model = object()

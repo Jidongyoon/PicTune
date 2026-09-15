@@ -30,11 +30,11 @@ spec:
             - name: music-http
               containerPort: 8002
           env:
-            # torch/numpy가 노드 4코어를 전부 점유해 vlm(llama-server)과 자원을 다투지 않도록 제한
+            # HPA로 최대 2 Pod가 실행되므로 Pod마다 CPU 스레드를 1개로 제한한다.
             - name: OMP_NUM_THREADS
-              value: "2"
+              value: "1"
             - name: MKL_NUM_THREADS
-              value: "2"
+              value: "1"
             # huggingface_hub가 자동으로 읽는다(코드 수정 불필요).
             # Secret(pictune-hf-token)이 없으면 Pod가 뜨지 않는다.
             - name: HF_TOKEN
@@ -47,8 +47,8 @@ spec:
               cpu: 800m
               memory: 3Gi
             limits:
-              cpu: 2000m
-              memory: 4Gi
+              cpu: 1000m # HPA 최대 2 Pod 합계 2000m
+              memory: 3Gi # HPA 최대 2 Pod 합계 6Gi
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
